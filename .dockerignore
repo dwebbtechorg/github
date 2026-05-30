@@ -1,8 +1,0 @@
-.git
-.github
-site/
-__pycache__/
-*.pyc
-.venv/
-venv/
-README.md
