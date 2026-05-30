@@ -1,0 +1,53 @@
+name: Deploy docs to self-hosted runner
+
+# Build the MkDocs site into a Docker image and run it on the self-hosted
+# host using host networking.
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  IMAGE_NAME: example-mkdocs
+  CONTAINER_NAME: example-mkdocs
+
+jobs:
+  deploy:
+    runs-on: [self-hosted]
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t "${IMAGE_NAME}:${GITHUB_SHA}" -t "${IMAGE_NAME}:latest" .
+
+      - name: Stop and remove any existing container
+        run: |
+          if [ -n "$(docker ps -aq -f name=^/${CONTAINER_NAME}$)" ]; then
+            echo "Removing existing container ${CONTAINER_NAME}"
+            docker rm -f "${CONTAINER_NAME}"
+          fi
+
+      - name: Start container with host networking
+        run: |
+          docker run -d \
+            --name "${CONTAINER_NAME}" \
+            --network host \
+            --restart unless-stopped \
+            "${IMAGE_NAME}:latest"
+
+      - name: Verify the site is serving
+        run: |
+          echo "Waiting for the site to come up on http://localhost:8000 ..."
+          for i in $(seq 1 15); do
+            if curl -fsS http://localhost:8000/ >/dev/null; then
+              echo "Site is up."
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Site did not respond in time. Container logs:"
+          docker logs "${CONTAINER_NAME}" || true
+          exit 1
